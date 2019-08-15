@@ -51,6 +51,7 @@ using System.Collections;
 // (it's ambiguos with uPLibrary.Networking.M2Mqtt.Utility.Trace)
 using MqttUtility = uPLibrary.Networking.M2Mqtt.Utility;
 using System.IO;
+using Org.Mentalis.Network.ProxySocket;
 
 namespace uPLibrary.Networking.M2Mqtt
 {
@@ -302,13 +303,13 @@ namespace uPLibrary.Networking.M2Mqtt
 #if !(WINDOWS_APP || WINDOWS_PHONE_APP)
         /// <param name="caCert">CA certificate for secure connection</param>
         /// <param name="clientCert">Client certificate</param>
-        public MqttClient(string brokerHostName, int brokerPort, bool secure, X509Certificate caCert, X509Certificate clientCert, MqttSslProtocols sslProtocol)            
+        public MqttClient(string brokerHostName, int brokerPort, bool secure, X509Certificate caCert, X509Certificate clientCert, MqttSslProtocols sslProtocol, ProxyConfig? proxyConfig = null)            
 #else
         public MqttClient(string brokerHostName, int brokerPort, bool secure, MqttSslProtocols sslProtocol)            
 #endif
         {
 #if !(MF_FRAMEWORK_VERSION_V4_2 || MF_FRAMEWORK_VERSION_V4_3 || COMPACT_FRAMEWORK || WINDOWS_APP || WINDOWS_PHONE_APP)
-            this.Init(brokerHostName, brokerPort, secure, caCert, clientCert, sslProtocol, null, null);
+            this.Init(brokerHostName, brokerPort, secure, caCert, clientCert, sslProtocol, null, null, proxyConfig);
 #elif (WINDOWS_APP || WINDOWS_PHONE_APP)
             this.Init(brokerHostName, brokerPort, secure, sslProtocol);
 #else
@@ -420,7 +421,7 @@ namespace uPLibrary.Networking.M2Mqtt
         /// <param name="userCertificateValidationCallback">A LocalCertificateSelectionCallback delegate responsible for selecting the certificate used for authentication</param>
         private void Init(string brokerHostName, int brokerPort, bool secure, X509Certificate caCert, X509Certificate clientCert, MqttSslProtocols sslProtocol,
             RemoteCertificateValidationCallback userCertificateValidationCallback,
-            LocalCertificateSelectionCallback userCertificateSelectionCallback)
+            LocalCertificateSelectionCallback userCertificateSelectionCallback, ProxyConfig? proxyConfig = null)
 #elif (WINDOWS_APP || WINDOWS_PHONE_APP)
         private void Init(string brokerHostName, int brokerPort, bool secure, MqttSslProtocols sslProtocol)
 #else
@@ -461,9 +462,21 @@ namespace uPLibrary.Networking.M2Mqtt
             // session
             this.session = null;
 
+            if (proxyConfig == null)
+            {
+                proxyConfig = new ProxyConfig
+                {
+                    ProxyType = ProxyServerType.None, 
+                    Address = null, 
+                    Password = null, 
+                    UserName = null, 
+                    Port = 0
+                }; 
+            }
+
             // create network channel
 #if !(MF_FRAMEWORK_VERSION_V4_2 || MF_FRAMEWORK_VERSION_V4_3 || COMPACT_FRAMEWORK || WINDOWS_APP || WINDOWS_PHONE_APP)
-            this.channel = new MqttNetworkChannel(this.brokerHostName, this.brokerPort, secure, caCert, clientCert, sslProtocol, userCertificateValidationCallback, userCertificateSelectionCallback);
+            this.channel = new MqttNetworkChannel(this.brokerHostName, this.brokerPort, secure, caCert, clientCert, sslProtocol, userCertificateValidationCallback, userCertificateSelectionCallback, proxyConfig);
 #elif (WINDOWS_APP || WINDOWS_PHONE_APP)
             this.channel = new MqttNetworkChannel(this.brokerHostName, this.brokerPort, secure, sslProtocol);
 #else
@@ -2620,6 +2633,7 @@ namespace uPLibrary.Networking.M2Mqtt
 
             }
         }
+
     }
 
     /// <summary>
@@ -2629,5 +2643,24 @@ namespace uPLibrary.Networking.M2Mqtt
     {
         Version_3_1 = MqttMsgConnect.PROTOCOL_VERSION_V3_1,
         Version_3_1_1 = MqttMsgConnect.PROTOCOL_VERSION_V3_1_1
+    }
+
+    // We are re-defining this to prevent the need for apps using this library to 
+    // have to include the ProxySocket library as an implicit reference.  
+    public enum ProxyServerType
+    {
+        None, 
+        Socks4, 
+        Socks5, 
+        Https
+    }
+
+    public struct ProxyConfig
+    {
+        public string UserName { get; set; }
+        public string Password { get; set; }
+        public ProxyServerType ProxyType { get; set; }
+        public string Address { get; set; }
+        public int Port { get; set; }
     }
 }

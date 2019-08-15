@@ -26,6 +26,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System;
+using Org.Mentalis.Network.ProxySocket;
 
 namespace uPLibrary.Networking.M2Mqtt
 {
@@ -44,7 +45,7 @@ namespace uPLibrary.Networking.M2Mqtt
         private int remotePort;
 
         // socket for communication
-        private Socket socket;
+        private ProxySocket socket;
         // using SSL
         private bool secure;
 
@@ -57,6 +58,7 @@ namespace uPLibrary.Networking.M2Mqtt
 
         // SSL/TLS protocol version
         private MqttSslProtocols sslProtocol;
+        private ProxyConfig? proxyConfig = null;
 
         /// <summary>
         /// Remote host name
@@ -110,7 +112,7 @@ namespace uPLibrary.Networking.M2Mqtt
         /// Constructor
         /// </summary>
         /// <param name="socket">Socket opened with the client</param>
-        public MqttNetworkChannel(Socket socket)
+        public MqttNetworkChannel(ProxySocket socket)
 #if !(MF_FRAMEWORK_VERSION_V4_2 || MF_FRAMEWORK_VERSION_V4_3 || COMPACT_FRAMEWORK)
             : this(socket, false, null, MqttSslProtocols.None, null, null)
 #else
@@ -130,7 +132,7 @@ namespace uPLibrary.Networking.M2Mqtt
 #if !(MF_FRAMEWORK_VERSION_V4_2 || MF_FRAMEWORK_VERSION_V4_3 || COMPACT_FRAMEWORK)
         /// <param name="userCertificateSelectionCallback">A RemoteCertificateValidationCallback delegate responsible for validating the certificate supplied by the remote party</param>
         /// <param name="userCertificateValidationCallback">A LocalCertificateSelectionCallback delegate responsible for selecting the certificate used for authentication</param>
-        public MqttNetworkChannel(Socket socket, bool secure, X509Certificate serverCert, MqttSslProtocols sslProtocol,
+        public MqttNetworkChannel(ProxySocket socket, bool secure, X509Certificate serverCert, MqttSslProtocols sslProtocol,
             RemoteCertificateValidationCallback userCertificateValidationCallback,
             LocalCertificateSelectionCallback userCertificateSelectionCallback)
 #else
@@ -175,7 +177,7 @@ namespace uPLibrary.Networking.M2Mqtt
         /// <param name="userCertificateValidationCallback">A LocalCertificateSelectionCallback delegate responsible for selecting the certificate used for authentication</param>
         public MqttNetworkChannel(string remoteHostName, int remotePort, bool secure, X509Certificate caCert, X509Certificate clientCert, MqttSslProtocols sslProtocol,
             RemoteCertificateValidationCallback userCertificateValidationCallback,
-            LocalCertificateSelectionCallback userCertificateSelectionCallback)
+            LocalCertificateSelectionCallback userCertificateSelectionCallback, ProxyConfig? proxyConfig = null)
 #else
         public MqttNetworkChannel(string remoteHostName, int remotePort, bool secure, X509Certificate caCert, X509Certificate clientCert, MqttSslProtocols sslProtocol)
 #endif
@@ -188,6 +190,10 @@ namespace uPLibrary.Networking.M2Mqtt
             this.caCert = caCert;
             this.clientCert = clientCert;
             this.sslProtocol = sslProtocol;
+            this.proxyConfig = proxyConfig ?? new ProxyConfig
+            {
+                ProxyType = ProxyServerType.None
+            };
 #if !(MF_FRAMEWORK_VERSION_V4_2 || MF_FRAMEWORK_VERSION_V4_3 || COMPACT_FRAMEWORK)
             this.userCertificateValidationCallback = userCertificateValidationCallback;
             this.userCertificateSelectionCallback = userCertificateSelectionCallback;
@@ -232,7 +238,37 @@ namespace uPLibrary.Networking.M2Mqtt
         public void Connect()
         {
             this.remoteIpAddress = LookupRemoteIpAddress(this.remoteHostName);
-            this.socket = new Socket(this.remoteIpAddress.GetAddressFamily(), SocketType.Stream, ProtocolType.Tcp);
+            this.socket = new ProxySocket(this.remoteIpAddress.GetAddressFamily(), SocketType.Stream, ProtocolType.Tcp);
+
+            if (proxyConfig.HasValue && proxyConfig.Value.ProxyType != ProxyServerType.None)
+            {
+                switch (proxyConfig.Value.ProxyType)
+                {
+                    case ProxyServerType.Https:
+                        this.socket.ProxyType = ProxyTypes.Https; 
+                        break;
+                        
+                    case ProxyServerType.Socks4:
+                        this.socket.ProxyType = ProxyTypes.Socks4; 
+                        break;
+                    case ProxyServerType.Socks5:
+                        this.socket.ProxyType = ProxyTypes.Socks5; 
+                        break;
+                }
+
+                if (!string.IsNullOrEmpty(this.proxyConfig.Value.Password))
+                {
+                    this.socket.ProxyPass = this.proxyConfig.Value.Password;
+                }
+
+                if (!string.IsNullOrEmpty(this.proxyConfig.Value.UserName))
+                {
+                    this.socket.ProxyUser = this.proxyConfig.Value.UserName;
+                }
+                this.socket.ProxyEndPoint = new IPEndPoint(IPAddress.Parse(this.proxyConfig.Value.Address), this.proxyConfig.Value.Port);
+
+            }
+
             // try connection to the broker
             this.socket.Connect(new IPEndPoint(this.remoteIpAddress, this.remotePort));
 
