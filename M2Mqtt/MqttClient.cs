@@ -549,7 +549,8 @@ namespace uPLibrary.Networking.M2Mqtt
             string willTopic,
             string willMessage,
             bool cleanSession,
-            ushort keepAlivePeriod)
+            ushort keepAlivePeriod, 
+            int timeoutInMs = 30000)
         {
             // create CONNECT message
             MqttMsgConnect connect = new MqttMsgConnect(clientId,
@@ -580,7 +581,7 @@ namespace uPLibrary.Networking.M2Mqtt
             // start thread for receiving messages from broker
             Fx.StartThread(this.ReceiveThread);
             
-            MqttMsgConnack connack = (MqttMsgConnack)this.SendReceive(connect);
+            MqttMsgConnack connack = (MqttMsgConnack)this.SendReceive(connect, timeoutInMs);
             // if connection accepted, start keep alive timer and 
             if (connack.ReturnCode == MqttMsgConnack.CONN_ACCEPTED)
             {
