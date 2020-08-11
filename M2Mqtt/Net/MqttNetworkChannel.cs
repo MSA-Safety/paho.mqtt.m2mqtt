@@ -41,7 +41,6 @@ namespace uPLibrary.Networking.M2Mqtt
 #endif
         // remote host information
         private string remoteHostName;
-        private IPAddress remoteIpAddress;
         private int remotePort;
 
         // socket for communication
@@ -64,11 +63,6 @@ namespace uPLibrary.Networking.M2Mqtt
         /// Remote host name
         /// </summary>
         public string RemoteHostName { get { return this.remoteHostName; } }
-
-        /// <summary>
-        /// Remote IP address
-        /// </summary>
-        public IPAddress RemoteIpAddress { get { return this.remoteIpAddress; } }
 
         /// <summary>
         /// Remote port
@@ -184,7 +178,6 @@ namespace uPLibrary.Networking.M2Mqtt
         { 
 
             this.remoteHostName = remoteHostName;
-            this.remoteIpAddress = LookupRemoteIpAddress(remoteHostName);
             this.remotePort = remotePort;
             this.secure = secure;
             this.caCert = caCert;
@@ -237,8 +230,7 @@ namespace uPLibrary.Networking.M2Mqtt
         /// </summary>
         public void Connect()
         {
-            this.remoteIpAddress = LookupRemoteIpAddress(this.remoteHostName);
-            this.socket = new ProxySocket(this.remoteIpAddress.GetAddressFamily(), SocketType.Stream, ProtocolType.Tcp);
+            this.socket = new ProxySocket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
             if (proxyConfig.HasValue && proxyConfig.Value.ProxyType != ProxyServerType.None)
             {
@@ -270,7 +262,12 @@ namespace uPLibrary.Networking.M2Mqtt
             }
 
             // try connection to the broker
-            this.socket.Connect(new IPEndPoint(this.remoteIpAddress, this.remotePort));
+            var host = this.remoteHostName;
+            if (proxyConfig.HasValue && proxyConfig.Value.ProxyType == ProxyServerType.Socks4)
+            {
+                host = LookupRemoteIpAddress(remoteHostName).ToString(); 
+            }
+            this.socket.Connect(host, this.remotePort);
 
 #if SSL
             // secure channel requested
